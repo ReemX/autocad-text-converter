@@ -1,12 +1,14 @@
 import "./style.css";
 import { convert, type Direction } from "./translator/convert.ts";
 import { createDictation, getSpeechRecognition } from "./speech.ts";
+import { applyTheme, loadTheme, type Theme } from "./theme.ts";
 
 type State = {
   direction: Direction;
   finalText: string;
   interimText: string;
   listening: boolean;
+  theme: Theme;
 };
 
 const state: State = {
@@ -14,12 +16,28 @@ const state: State = {
   finalText: "",
   interimText: "",
   listening: false,
+  theme: loadTheme(),
 };
 
-const SWAP_SVG = `
+applyTheme(state.theme);
+
+const SVG_SWAP = `
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M5 8h14M5 8l4-4M5 8l4 4" />
     <path d="M19 16H5M19 16l-4-4M19 16l-4 4" />
+  </svg>`;
+
+const SVG_MIC = `
+  <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="12" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0" />
+    <path d="M12 18v3M9 21h6" />
+  </svg>`;
+
+const SVG_COPY = `
+  <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="9" y="9" width="11" height="11" rx="1" />
+    <path d="M5 15V5a2 2 0 012-2h10" />
   </svg>`;
 
 const REG_MARKS = `
@@ -31,18 +49,35 @@ const REG_MARKS = `
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="sheet" role="main">
+    <div class="theme-toggle" role="group" aria-label="ערכת נושא">
+      <button data-theme-value="auto" type="button">AUTO</button>
+      <button data-theme-value="light" type="button">LIGHT</button>
+      <button data-theme-value="dark" type="button">DARK</button>
+    </div>
+
+    <div class="stamp" aria-hidden="true">
+      <div class="stamp-cell">
+        <span class="stamp-key">SHEET</span>
+        <span class="stamp-val">01</span>
+      </div>
+      <div class="stamp-cell">
+        <span class="stamp-key">REV</span>
+        <span class="stamp-val">02</span>
+      </div>
+      <div class="stamp-cell">
+        <span class="stamp-key">SCALE</span>
+        <span class="stamp-val">1:1</span>
+      </div>
+      <div class="stamp-cell">
+        <span class="stamp-key">FORMAT</span>
+        <span class="stamp-val">HE⇄EN</span>
+      </div>
+    </div>
+
     <header class="masthead">
-      <div class="title-block">
-        <h1 class="title">
-          <span class="title-bar" aria-hidden="true"></span>
-          ממיר טקסט · אוטוקאד
-        </h1>
-        <p class="subtitle">מיפוי מקלדת עברי-אנגלי לתצוגת אוטוקאד · תמלול דיבור חי</p>
-      </div>
-      <div class="meta" aria-hidden="true">
-        <span class="meta-row"><span class="meta-dot"></span>SHEET 01 · REV 02</span>
-        <span class="meta-row">SCALE 1:1 · HE ⇄ EN</span>
-      </div>
+      <span class="eyebrow">HE-EN KEYBOARD MAP</span>
+      <h1 class="title">ממיר טקסט · אוטוקאד</h1>
+      <p class="subtitle">מיפוי מקלדת עברי-אנגלי לתצוגת אוטוקאד · תמלול דיבור חי</p>
     </header>
 
     <section class="converter" aria-label="ממיר טקסט">
@@ -51,8 +86,8 @@ app.innerHTML = `
         <div class="pane-header">
           <span class="lang-label" data-role="input-label"></span>
           <button class="btn mic-btn" data-role="mic" type="button" aria-pressed="false">
-            <span class="mic-dot" aria-hidden="true"></span>
-            <span>מיקרופון</span>
+            ${SVG_MIC}
+            <span data-role="mic-label">מיקרופון</span>
           </button>
         </div>
         <textarea
@@ -67,7 +102,7 @@ app.innerHTML = `
       <div class="divider" aria-hidden="true">
         <span class="dim-line"></span>
         <button class="swap-btn" data-role="swap" type="button" aria-label="החלף כיוון">
-          ${SWAP_SVG}
+          ${SVG_SWAP}
         </button>
         <span class="dim-line"></span>
       </div>
@@ -77,7 +112,8 @@ app.innerHTML = `
         <div class="pane-header">
           <span class="lang-label" data-role="output-label"></span>
           <button class="btn copy-btn" data-role="copy" type="button" aria-label="העתק פלט">
-            העתק
+            ${SVG_COPY}
+            <span data-role="copy-label">העתק</span>
           </button>
         </div>
         <textarea
@@ -102,12 +138,23 @@ const outputEl = app.querySelector<HTMLTextAreaElement>('[data-role="output-text
 const swapBtn = app.querySelector<HTMLButtonElement>('[data-role="swap"]')!;
 const micBtn = app.querySelector<HTMLButtonElement>('[data-role="mic"]')!;
 const copyBtn = app.querySelector<HTMLButtonElement>('[data-role="copy"]')!;
+const copyLabel = app.querySelector<HTMLSpanElement>('[data-role="copy-label"]')!;
 const inputLabel = app.querySelector<HTMLSpanElement>('[data-role="input-label"]')!;
 const outputLabel = app.querySelector<HTMLSpanElement>('[data-role="output-label"]')!;
 const statusLabel = app.querySelector<HTMLSpanElement>('[data-role="status-label"]')!;
 const hintEl = app.querySelector<HTMLParagraphElement>('[data-role="hint"]')!;
+const themeButtons = Array.from(
+  app.querySelectorAll<HTMLButtonElement>("[data-theme-value]"),
+);
 
 let recognition: ReturnType<typeof createDictation> = null;
+
+function syncThemeButtons() {
+  for (const b of themeButtons) {
+    const value = b.dataset.themeValue as Theme;
+    b.setAttribute("aria-pressed", String(value === state.theme));
+  }
+}
 
 function applyDirection() {
   const isHeToEn = state.direction === "he-to-en";
@@ -136,6 +183,14 @@ function setStatus(label: string, hint = "", isError = false) {
   hintEl.classList.toggle("error", isError);
 }
 
+for (const b of themeButtons) {
+  b.addEventListener("click", () => {
+    state.theme = b.dataset.themeValue as Theme;
+    applyTheme(state.theme);
+    syncThemeButtons();
+  });
+}
+
 inputEl.addEventListener("input", () => {
   state.finalText = inputEl.value;
   state.interimText = "";
@@ -155,12 +210,12 @@ copyBtn.addEventListener("click", async () => {
   if (!outputEl.value) return;
   try {
     await navigator.clipboard.writeText(outputEl.value);
-    const prev = copyBtn.textContent;
-    copyBtn.textContent = "הועתק";
+    const original = copyLabel.textContent;
+    copyLabel.textContent = "הועתק";
     copyBtn.style.borderColor = "var(--accent-cool)";
     copyBtn.style.color = "var(--accent-cool)";
     setTimeout(() => {
-      copyBtn.textContent = prev;
+      copyLabel.textContent = original;
       copyBtn.style.borderColor = "";
       copyBtn.style.color = "";
     }, 1300);
@@ -225,5 +280,6 @@ if (!getSpeechRecognition()) {
   setStatus("READY", "תמלול דיבור דורש Chrome או Edge.");
 }
 
+syncThemeButtons();
 applyDirection();
 render();
