@@ -2,71 +2,61 @@ import { describe, expect, it } from "vitest";
 import { convert } from "./convert.ts";
 import { EN_TO_HE, HE_TO_EN } from "./keymap.ts";
 
-describe("convert: en -> he letter mapping", () => {
-  it("maps every entry in EN_TO_HE", () => {
-    for (const [en, he] of Object.entries(EN_TO_HE)) {
-      expect(convert(en, "en-to-he"), `"${en}" should map to "${he}"`).toBe(he);
+describe("convert: letter mapping", () => {
+  it("maps every Hebrew letter to its English keyboard key", () => {
+    for (const [he, en] of Object.entries(HE_TO_EN)) {
+      expect(convert(he), `"${he}" should map to "${en}"`).toBe(en);
     }
   });
 
-  it("maps a sample word", () => {
-    expect(convert("shalom", "en-to-he")).toBe("דישךםצ");
+  it("is consistent with the source EN_TO_HE map", () => {
+    for (const [en, he] of Object.entries(EN_TO_HE)) {
+      expect(convert(he)).toBe(en);
+    }
+  });
+
+  it("converts a Hebrew word", () => {
+    expect(convert("שלום")).toBe("akuo");
   });
 
   it("preserves spaces", () => {
-    expect(convert("a b c", "en-to-he")).toBe("ש נ ב");
-  });
-});
-
-describe("convert: he -> en letter mapping", () => {
-  it("maps every entry in HE_TO_EN", () => {
-    for (const [he, en] of Object.entries(HE_TO_EN)) {
-      expect(convert(he, "he-to-en"), `"${he}" should map to "${en}"`).toBe(en);
-    }
-  });
-
-  it("is the inverse of en->he for plain letters", () => {
-    const sample = "abcdefghijklmnopqrstuvwxyz";
-    const round = convert(convert(sample, "en-to-he"), "he-to-en");
-    expect(round).toBe(sample);
+    expect(convert("ש נ ב")).toBe("a b c");
   });
 });
 
 describe("convert: passthrough", () => {
   it("returns empty for empty input", () => {
-    expect(convert("", "en-to-he")).toBe("");
-    expect(convert("", "he-to-en")).toBe("");
+    expect(convert("")).toBe("");
   });
 
   it("passes whitespace through", () => {
-    expect(convert("   ", "en-to-he")).toBe("   ");
+    expect(convert("   ")).toBe("   ");
   });
 
-  it("passes uppercase ASCII through (not in map)", () => {
-    expect(convert("ABC", "en-to-he")).toBe("ABC");
+  it("passes ASCII letters through (they aren't Hebrew)", () => {
+    expect(convert("ABC")).toBe("ABC");
+    expect(convert("hello")).toBe("hello");
   });
 
   it("passes unmapped punctuation through", () => {
-    expect(convert("?!@#$%^&*", "en-to-he")).toBe("?!@#$%^&*");
+    expect(convert("?!@#$%^&*")).toBe("?!@#$%^&*");
   });
 });
 
 describe("convert: quote normalization", () => {
   it("normalizes curly double quote U+201D to ASCII", () => {
-    expect(convert("”", "en-to-he")).toBe('"');
-    expect(convert("”", "he-to-en")).toBe('"');
+    expect(convert("”")).toBe('"');
   });
 
   it("normalizes Hebrew gershayim U+05F4 to ASCII", () => {
-    expect(convert("״", "en-to-he")).toBe('"');
-    expect(convert("״", "he-to-en")).toBe('"');
+    expect(convert("״")).toBe('"');
   });
 });
 
 // =============================================================================
 // EDGE CASES — behavior pending AutoCAD verification.
-// User will paste stress strings into AutoCAD and report rendered output.
-// Convert each `it.todo` into a real `it` once expected output is known.
+// User pastes stress strings into AutoCAD and reports rendered output.
+// Convert each `it.todo` into `it` once expected output is known.
 // =============================================================================
 
 describe("convert: digits and numbers (PENDING AutoCAD verification)", () => {
@@ -126,6 +116,6 @@ describe("convert: AutoCAD-specific notation (PENDING)", () => {
   it.todo("R=5");
   it.todo("percentage 50%");
   it.todo("plus/minus ±5");
-  it.todo("apostrophe in word (don't)");
+  it.todo("apostrophe in word");
   it.todo("double-quote inches (5\")");
 });

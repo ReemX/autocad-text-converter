@@ -1,3 +1,7 @@
+/**
+ * Source of truth: English keyboard key → Hebrew character produced when
+ * typing on a Hebrew keyboard layout (or in AutoCAD with a Hebrew font).
+ */
 export const EN_TO_HE: Readonly<Record<string, string>> = {
   ":": ",",
   ",": "ת",

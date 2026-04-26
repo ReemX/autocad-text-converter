@@ -1,10 +1,9 @@
 import "./style.css";
-import { convert, type Direction } from "./translator/convert.ts";
+import { convert } from "./translator/convert.ts";
 import { createDictation, getSpeechRecognition } from "./speech.ts";
 import { applyTheme, loadTheme, type Theme } from "./theme.ts";
 
 type State = {
-  direction: Direction;
   finalText: string;
   interimText: string;
   listening: boolean;
@@ -12,7 +11,6 @@ type State = {
 };
 
 const state: State = {
-  direction: "he-to-en",
   finalText: "",
   interimText: "",
   listening: false,
@@ -21,23 +19,39 @@ const state: State = {
 
 applyTheme(state.theme);
 
-const SVG_SWAP = `
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M5 8h14M5 8l4-4M5 8l4 4" />
-    <path d="M19 16H5M19 16l-4-4M19 16l-4 4" />
-  </svg>`;
-
 const SVG_MIC = `
-  <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="9" y="3" width="6" height="12" rx="3" />
     <path d="M5 11a7 7 0 0 0 14 0" />
     <path d="M12 18v3M9 21h6" />
   </svg>`;
 
 const SVG_COPY = `
-  <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="9" y="9" width="11" height="11" rx="1" />
     <path d="M5 15V5a2 2 0 012-2h10" />
+  </svg>`;
+
+const SVG_CHECK = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M5 12l4 4 10-10" />
+  </svg>`;
+
+const SVG_AUTO = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="3" y="5" width="18" height="12" rx="1.5" />
+    <path d="M9 21h6M12 17v4" />
+  </svg>`;
+
+const SVG_SUN = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" />
+  </svg>`;
+
+const SVG_MOON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
   </svg>`;
 
 const REG_MARKS = `
@@ -50,97 +64,54 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <main class="sheet" role="main">
     <div class="theme-toggle" role="group" aria-label="ערכת נושא">
-      <button data-theme-value="auto" type="button">AUTO</button>
-      <button data-theme-value="light" type="button">LIGHT</button>
-      <button data-theme-value="dark" type="button">DARK</button>
-    </div>
-
-    <div class="stamp" aria-hidden="true">
-      <div class="stamp-cell">
-        <span class="stamp-key">SHEET</span>
-        <span class="stamp-val">01</span>
-      </div>
-      <div class="stamp-cell">
-        <span class="stamp-key">REV</span>
-        <span class="stamp-val">02</span>
-      </div>
-      <div class="stamp-cell">
-        <span class="stamp-key">SCALE</span>
-        <span class="stamp-val">1:1</span>
-      </div>
-      <div class="stamp-cell">
-        <span class="stamp-key">FORMAT</span>
-        <span class="stamp-val">HE⇄EN</span>
-      </div>
+      <button data-theme-value="auto" type="button" aria-label="אוטומטי" title="אוטומטי">${SVG_AUTO}</button>
+      <button data-theme-value="light" type="button" aria-label="בהיר" title="בהיר">${SVG_SUN}</button>
+      <button data-theme-value="dark" type="button" aria-label="כהה" title="כהה">${SVG_MOON}</button>
     </div>
 
     <header class="masthead">
-      <span class="eyebrow">HE-EN KEYBOARD MAP</span>
       <h1 class="title">ממיר טקסט · אוטוקאד</h1>
-      <p class="subtitle">מיפוי מקלדת עברי-אנגלי לתצוגת אוטוקאד · תמלול דיבור חי</p>
     </header>
 
-    <section class="converter" aria-label="ממיר טקסט">
-      <div class="pane" data-role="input">
+    <section class="composer">
+      <div class="pane">
         ${REG_MARKS}
-        <div class="pane-header">
-          <span class="lang-label" data-role="input-label"></span>
-          <button class="btn mic-btn" data-role="mic" type="button" aria-pressed="false">
-            ${SVG_MIC}
-            <span data-role="mic-label">מיקרופון</span>
-          </button>
-        </div>
+        <button class="mic-btn" data-role="mic" type="button"
+          aria-label="הפעל תמלול דיבור" aria-pressed="false" title="הפעל תמלול דיבור">
+          ${SVG_MIC}
+        </button>
         <textarea
-          class="textbox input"
+          class="textbox"
           data-role="input-text"
+          dir="rtl"
+          lang="he"
+          placeholder="כתוב או דבר בעברית..."
           spellcheck="false"
           autocomplete="off"
           autocapitalize="off"
+          autofocus
         ></textarea>
       </div>
 
-      <div class="divider" aria-hidden="true">
-        <span class="dim-line"></span>
-        <button class="swap-btn" data-role="swap" type="button" aria-label="החלף כיוון">
-          ${SVG_SWAP}
-        </button>
-        <span class="dim-line"></span>
-      </div>
-
-      <div class="pane" data-role="output">
-        ${REG_MARKS}
-        <div class="pane-header">
-          <span class="lang-label" data-role="output-label"></span>
-          <button class="btn copy-btn" data-role="copy" type="button" aria-label="העתק פלט">
-            ${SVG_COPY}
-            <span data-role="copy-label">העתק</span>
-          </button>
-        </div>
-        <textarea
-          class="textbox output"
-          data-role="output-text"
-          spellcheck="false"
-          readonly
-        ></textarea>
-      </div>
+      <button class="copy-btn" data-role="copy" type="button">
+        <span class="copy-icon" data-role="copy-icon">${SVG_COPY}</span>
+        <span class="copy-label" data-role="copy-label">העתק</span>
+      </button>
     </section>
 
     <footer class="status">
       <span class="status-pulse" aria-hidden="true"></span>
-      <span class="status-label" data-role="status-label">READY</span>
+      <span class="status-label" data-role="status-label">מוכן</span>
       <p class="hint" data-role="hint"></p>
     </footer>
   </main>
 `;
 
 const inputEl = app.querySelector<HTMLTextAreaElement>('[data-role="input-text"]')!;
-const outputEl = app.querySelector<HTMLTextAreaElement>('[data-role="output-text"]')!;
-const swapBtn = app.querySelector<HTMLButtonElement>('[data-role="swap"]')!;
 const micBtn = app.querySelector<HTMLButtonElement>('[data-role="mic"]')!;
 const copyBtn = app.querySelector<HTMLButtonElement>('[data-role="copy"]')!;
+const copyIcon = app.querySelector<HTMLSpanElement>('[data-role="copy-icon"]')!;
 const copyLabel = app.querySelector<HTMLSpanElement>('[data-role="copy-label"]')!;
-const inputLabel = app.querySelector<HTMLSpanElement>('[data-role="input-label"]')!;
-const outputLabel = app.querySelector<HTMLSpanElement>('[data-role="output-label"]')!;
 const statusLabel = app.querySelector<HTMLSpanElement>('[data-role="status-label"]')!;
 const hintEl = app.querySelector<HTMLParagraphElement>('[data-role="hint"]')!;
 const themeButtons = Array.from(
@@ -148,6 +119,7 @@ const themeButtons = Array.from(
 );
 
 let recognition: ReturnType<typeof createDictation> = null;
+let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
 function syncThemeButtons() {
   for (const b of themeButtons) {
@@ -156,25 +128,10 @@ function syncThemeButtons() {
   }
 }
 
-function applyDirection() {
-  const isHeToEn = state.direction === "he-to-en";
-  inputLabel.textContent = isHeToEn ? "עברית" : "אנגלית";
-  outputLabel.textContent = isHeToEn ? "אנגלית" : "עברית";
-  inputEl.dir = isHeToEn ? "rtl" : "ltr";
-  outputEl.dir = isHeToEn ? "ltr" : "rtl";
-  inputEl.lang = isHeToEn ? "he" : "en";
-  outputEl.lang = isHeToEn ? "en" : "he";
-  inputEl.placeholder = isHeToEn ? "כתוב או דבר..." : "Type to convert...";
-  micBtn.disabled = !isHeToEn || !getSpeechRecognition();
-  micBtn.title = isHeToEn
-    ? "הפעל תמלול דיבור (עברית)"
-    : "תמלול זמין במצב עברית בלבד";
-}
-
 function render() {
   const combined = state.finalText + state.interimText;
   if (inputEl.value !== combined) inputEl.value = combined;
-  outputEl.value = convert(combined, state.direction);
+  copyBtn.disabled = combined.trim().length === 0;
 }
 
 function setStatus(label: string, hint = "", isError = false) {
@@ -197,30 +154,22 @@ inputEl.addEventListener("input", () => {
   render();
 });
 
-swapBtn.addEventListener("click", () => {
-  stopDictation();
-  state.direction = state.direction === "he-to-en" ? "en-to-he" : "he-to-en";
-  state.finalText = inputEl.value;
-  state.interimText = "";
-  applyDirection();
-  render();
-});
-
 copyBtn.addEventListener("click", async () => {
-  if (!outputEl.value) return;
+  const source = state.finalText + state.interimText;
+  if (!source) return;
   try {
-    await navigator.clipboard.writeText(outputEl.value);
-    const original = copyLabel.textContent;
+    await navigator.clipboard.writeText(convert(source));
+    copyBtn.classList.add("copied");
+    copyIcon.innerHTML = SVG_CHECK;
     copyLabel.textContent = "הועתק";
-    copyBtn.style.borderColor = "var(--accent-cool)";
-    copyBtn.style.color = "var(--accent-cool)";
-    setTimeout(() => {
-      copyLabel.textContent = original;
-      copyBtn.style.borderColor = "";
-      copyBtn.style.color = "";
-    }, 1300);
+    if (copyResetTimer) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => {
+      copyBtn.classList.remove("copied");
+      copyIcon.innerHTML = SVG_COPY;
+      copyLabel.textContent = "העתק";
+    }, 1400);
   } catch {
-    setStatus("ERROR", "ההעתקה נכשלה. נסה שוב.", true);
+    setStatus("שגיאה", "ההעתקה נכשלה. נסה שוב.", true);
   }
 });
 
@@ -230,7 +179,6 @@ micBtn.addEventListener("click", () => {
 });
 
 function startDictation() {
-  if (state.direction !== "he-to-en") return;
   recognition = createDictation("he-IL", {
     onFinal: (text) => {
       const sep = state.finalText && !state.finalText.endsWith(" ") ? " " : "";
@@ -243,25 +191,25 @@ function startDictation() {
       render();
     },
     onError: (error) => {
-      setStatus("ERROR", `שגיאת מיקרופון: ${error}`, true);
+      setStatus("שגיאה", `מיקרופון: ${error}`, true);
       stopDictation();
     },
     onEnd: () => {
       state.listening = false;
       micBtn.setAttribute("aria-pressed", "false");
       micBtn.classList.remove("listening");
-      setStatus("READY");
+      setStatus("מוכן");
     },
   });
   if (!recognition) {
-    setStatus("UNAVAILABLE", "תמלול דיבור אינו זמין בדפדפן זה.", true);
+    setStatus("לא זמין", "תמלול דיבור אינו זמין בדפדפן זה.", true);
     return;
   }
   recognition.start();
   state.listening = true;
   micBtn.setAttribute("aria-pressed", "true");
   micBtn.classList.add("listening");
-  setStatus("LISTENING", "");
+  setStatus("מקשיב");
 }
 
 function stopDictation() {
@@ -272,14 +220,16 @@ function stopDictation() {
   state.interimText = "";
   micBtn.setAttribute("aria-pressed", "false");
   micBtn.classList.remove("listening");
-  setStatus("READY");
+  setStatus("מוכן");
   render();
 }
 
 if (!getSpeechRecognition()) {
-  setStatus("READY", "תמלול דיבור דורש Chrome או Edge.");
+  micBtn.disabled = true;
+  micBtn.title = "תמלול דורש Chrome או Edge";
+  setStatus("מוכן", "תמלול דיבור דורש Chrome או Edge.");
 }
 
 syncThemeButtons();
-applyDirection();
 render();
+inputEl.focus();

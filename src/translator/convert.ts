@@ -1,16 +1,17 @@
-import { EN_TO_HE, HE_TO_EN } from "./keymap.ts";
-
-export type Direction = "en-to-he" | "he-to-en";
+import { HE_TO_EN } from "./keymap.ts";
 
 const QUOTE_NORMALIZE: Readonly<Record<string, string>> = {
   "”": '"',
   "״": '"',
 };
 
-export function convert(input: string, direction: Direction): string {
+/**
+ * Convert Hebrew text (typed naturally) to the English keyboard keystrokes
+ * that produce the same characters in AutoCAD with a Hebrew font.
+ */
+export function convert(input: string): string {
   if (!input) return "";
 
-  const map = direction === "en-to-he" ? EN_TO_HE : HE_TO_EN;
   const segments: string[] = [];
   let digitRun = "";
 
@@ -34,7 +35,7 @@ export function convert(input: string, direction: Direction): string {
   return segments
     .map((seg) => {
       if (seg.length > 1) return seg.split("").reverse().join("");
-      return map[seg] ?? seg;
+      return HE_TO_EN[seg] ?? seg;
     })
     .join("");
 }
