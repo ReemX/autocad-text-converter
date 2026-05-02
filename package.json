@@ -16,5 +16,9 @@
     "typescript": "~6.0.2",
     "vite": "^8.0.10",
     "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "@ricky0123/vad-web": "^0.0.30"
   }
 }

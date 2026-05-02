@@ -1,19 +1,20 @@
 import "./style.css";
 import { convert } from "./translator/convert.ts";
-import { createDictation, getSpeechRecognition } from "./speech.ts";
+import { Whisper, type ProgressData } from "./whisper.ts";
+import { startRecording, type Recorder } from "./recorder.ts";
 import { applyTheme, loadTheme, type Theme } from "./theme.ts";
+
+type Phase = "idle" | "recording" | "transcribing";
 
 type State = {
   finalText: string;
-  interimText: string;
-  listening: boolean;
+  phase: Phase;
   theme: Theme;
 };
 
 const state: State = {
   finalText: "",
-  interimText: "",
-  listening: false,
+  phase: "idle",
   theme: loadTheme(),
 };
 
@@ -105,6 +106,23 @@ app.innerHTML = `
       <p class="hint" data-role="hint"></p>
     </footer>
   </main>
+
+  <div class="model-overlay" data-role="model-overlay" hidden>
+    <div class="model-card" role="dialog" aria-modal="true" aria-labelledby="model-title">
+      <h2 id="model-title" class="model-title">טוען מודל תמלול</h2>
+      <p class="model-sub" data-role="model-sub">
+        ההורדה היא חד-פעמית. בפעמים הבאות הטעינה תהיה מהירה.
+      </p>
+      <div class="progress-shell">
+        <div class="progress-bar" data-role="progress-bar"></div>
+      </div>
+      <div class="progress-meta">
+        <span class="progress-percent" data-role="progress-percent">0%</span>
+        <span class="progress-bytes" data-role="progress-bytes"></span>
+      </div>
+      <p class="model-warning">אל תסגור את החלון עד לסיום ההורדה.</p>
+    </div>
+  </div>
 `;
 
 const inputEl = app.querySelector<HTMLTextAreaElement>('[data-role="input-text"]')!;
@@ -115,11 +133,18 @@ const copyLabel = app.querySelector<HTMLSpanElement>('[data-role="copy-label"]')
 const statusLabel = app.querySelector<HTMLSpanElement>('[data-role="status-label"]')!;
 const hintEl = app.querySelector<HTMLParagraphElement>('[data-role="hint"]')!;
 const themeButtons = Array.from(
-  app.querySelectorAll<HTMLButtonElement>("[data-theme-value]"),
+  document.querySelectorAll<HTMLButtonElement>("[data-theme-value]"),
 );
 
-let recognition: ReturnType<typeof createDictation> = null;
+const overlayEl = document.querySelector<HTMLDivElement>('[data-role="model-overlay"]')!;
+const overlaySub = document.querySelector<HTMLParagraphElement>('[data-role="model-sub"]')!;
+const progressBar = document.querySelector<HTMLDivElement>('[data-role="progress-bar"]')!;
+const progressPercent = document.querySelector<HTMLSpanElement>('[data-role="progress-percent"]')!;
+const progressBytes = document.querySelector<HTMLSpanElement>('[data-role="progress-bytes"]')!;
+
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
+let recorder: Recorder | null = null;
+const fileBytes = new Map<string, { loaded: number; total: number }>();
 
 function syncThemeButtons() {
   for (const b of themeButtons) {
@@ -129,9 +154,8 @@ function syncThemeButtons() {
 }
 
 function render() {
-  const combined = state.finalText + state.interimText;
-  if (inputEl.value !== combined) inputEl.value = combined;
-  copyBtn.disabled = combined.trim().length === 0;
+  if (inputEl.value !== state.finalText) inputEl.value = state.finalText;
+  copyBtn.disabled = state.finalText.trim().length === 0;
 }
 
 function setStatus(label: string, hint = "", isError = false) {
@@ -139,6 +163,77 @@ function setStatus(label: string, hint = "", isError = false) {
   hintEl.textContent = hint;
   hintEl.classList.toggle("error", isError);
 }
+
+function showOverlay() {
+  overlayEl.hidden = false;
+  document.body.classList.add("overlay-open");
+}
+
+function hideOverlay() {
+  overlayEl.hidden = true;
+  document.body.classList.remove("overlay-open");
+}
+
+function formatMB(bytes: number) {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function updateProgressUI(data: ProgressData) {
+  if (data.file && typeof data.loaded === "number" && typeof data.total === "number" && data.total > 0) {
+    fileBytes.set(data.file, { loaded: data.loaded, total: data.total });
+  }
+
+  let totalLoaded = 0;
+  let totalSize = 0;
+  for (const v of fileBytes.values()) {
+    totalLoaded += v.loaded;
+    totalSize += v.total;
+  }
+
+  const percent = totalSize > 0 ? Math.min(100, Math.round((totalLoaded / totalSize) * 100)) : 0;
+
+  if (data.status === "initiate" || data.status === "download" || data.status === "progress") {
+    overlaySub.textContent = "ההורדה היא חד-פעמית. בפעמים הבאות הטעינה תהיה מהירה.";
+  } else if (data.status === "done") {
+    overlaySub.textContent = "ההורדה הסתיימה. מאתחל את המודל…";
+  } else if (data.status === "ready") {
+    overlaySub.textContent = "המודל מוכן.";
+  }
+
+  progressBar.style.width = `${percent}%`;
+  progressPercent.textContent = `${percent}%`;
+  progressBytes.textContent =
+    totalSize > 0 ? `${formatMB(totalLoaded)} / ${formatMB(totalSize)}` : "";
+}
+
+const whisper = new Whisper({
+  onProgress: (data) => {
+    if (overlayEl.hidden) showOverlay();
+    updateProgressUI(data);
+  },
+  onReset: () => {
+    fileBytes.clear();
+    progressBar.style.width = "0%";
+    progressPercent.textContent = "0%";
+    progressBytes.textContent = "";
+    overlaySub.textContent =
+      "המודל הראשי לא נטען. עובר לגרסה קלה יותר…";
+  },
+  onReady: () => {
+    progressBar.style.width = "100%";
+    progressPercent.textContent = "100%";
+    overlaySub.textContent = "המודל מוכן. אפשר להתחיל בהקלטה.";
+    setTimeout(() => hideOverlay(), 600);
+    setStatus("מוכן");
+  },
+  onError: (err) => {
+    console.error("[whisper]", err);
+    hideOverlay();
+    setStatus("שגיאת מודל", err, true);
+    state.phase = "idle";
+    updateMicButton();
+  },
+});
 
 for (const b of themeButtons) {
   b.addEventListener("click", () => {
@@ -150,12 +245,11 @@ for (const b of themeButtons) {
 
 inputEl.addEventListener("input", () => {
   state.finalText = inputEl.value;
-  state.interimText = "";
   render();
 });
 
 copyBtn.addEventListener("click", async () => {
-  const source = state.finalText + state.interimText;
+  const source = state.finalText;
   if (!source) return;
   try {
     await navigator.clipboard.writeText(convert(source));
@@ -174,126 +268,103 @@ copyBtn.addEventListener("click", async () => {
 });
 
 micBtn.addEventListener("click", () => {
-  if (state.listening) stopDictation();
-  else startDictation();
+  if (state.phase === "recording") stopRecording();
+  else if (state.phase === "idle") startMicFlow();
 });
 
-const ERROR_HE: Record<string, string> = {
-  "not-allowed": "אין הרשאה למיקרופון. אפשר במערכת/דפדפן.",
-  "service-not-allowed": "שירות התמלול חסום בדפדפן.",
-  "audio-capture": "אין מיקרופון זמין או שהוא בשימוש באפליקציה אחרת.",
-  "no-speech": "לא זוהה דיבור.",
-  network: "תקלת רשת זמנית בשירות התמלול. בדוק חיבור ונסה שוב.",
-  "language-not-supported": "השפה אינה נתמכת.",
-  aborted: "התמלול הופסק.",
-};
-
-let lastErrored = false;
-let networkRetries = 0;
-let shouldRecreate = false;
-const MAX_NETWORK_RETRIES = 8;
-
-function buildRecognition() {
-  return createDictation("he-IL", {
-    onAudioStart: () => {
-      micBtn.classList.add("ready");
-      setStatus("מקשיב");
-    },
-    onFinal: (text) => {
-      const sep = state.finalText && !state.finalText.endsWith(" ") ? " " : "";
-      state.finalText = state.finalText + sep + text.trim() + " ";
-      state.interimText = "";
-      networkRetries = 0;
-      render();
-    },
-    onInterim: (text) => {
-      state.interimText = text;
-      networkRetries = 0;
-      render();
-    },
-    onError: (error) => {
-      console.error("[speech]", error);
-      if (error === "network" && networkRetries < MAX_NETWORK_RETRIES && state.listening) {
-        networkRetries++;
-        shouldRecreate = true;
-        micBtn.classList.remove("ready");
-        setStatus("מתכונן…", "המתן עד שהמיקרופון יתחיל להאזין.");
-        return;
-      }
-      if (error === "no-speech" && state.listening) {
-        return;
-      }
-      lastErrored = true;
-      const message = ERROR_HE[error] ?? `שגיאת מיקרופון: ${error}`;
-      state.listening = false;
-      micBtn.setAttribute("aria-pressed", "false");
-      micBtn.classList.remove("listening");
-      setStatus("שגיאה", message, true);
-    },
-    onEnd: () => {
-      if (state.listening && !lastErrored) {
-        if (shouldRecreate) {
-          shouldRecreate = false;
-          recognition = buildRecognition();
-          if (recognition) {
-            try {
-              recognition.start();
-              return;
-            } catch {
-              // fall through
-            }
-          }
-        } else {
-          try {
-            recognition?.start();
-            return;
-          } catch {
-            // fall through
-          }
-        }
-      }
-      state.listening = false;
-      micBtn.setAttribute("aria-pressed", "false");
-      micBtn.classList.remove("listening");
-      if (!lastErrored) setStatus("מוכן");
-    },
-  });
+function updateMicButton() {
+  micBtn.classList.toggle("listening", state.phase === "recording");
+  micBtn.classList.toggle("ready", state.phase === "recording");
+  micBtn.classList.toggle("busy", state.phase === "transcribing");
+  micBtn.disabled = state.phase === "transcribing";
+  micBtn.setAttribute("aria-pressed", String(state.phase === "recording"));
 }
 
-function startDictation() {
-  lastErrored = false;
-  networkRetries = 0;
-  shouldRecreate = false;
-  recognition = buildRecognition();
-  if (!recognition) {
-    setStatus("לא זמין", "תמלול דיבור אינו זמין בדפדפן זה.", true);
+async function startMicFlow() {
+  if (!whisper.isReady()) {
+    showOverlay();
+    whisper.load();
+    setStatus("מוריד מודל…", "ההורדה הראשונה יכולה לקחת מספר דקות.");
     return;
   }
-  recognition.start();
-  state.listening = true;
-  micBtn.setAttribute("aria-pressed", "true");
-  micBtn.classList.add("listening");
-  micBtn.classList.remove("ready");
-  setStatus("מתכונן…", "המתן עד שהמיקרופון יתחיל להאזין.");
+  await beginRecording();
 }
 
-function stopDictation() {
-  if (!recognition) return;
-  recognition.stop();
-  recognition = null;
-  state.listening = false;
-  state.interimText = "";
-  micBtn.setAttribute("aria-pressed", "false");
-  micBtn.classList.remove("listening");
-  micBtn.classList.remove("ready");
-  setStatus("מוכן");
-  render();
+async function beginRecording() {
+  try {
+    recorder = await startRecording();
+    state.phase = "recording";
+    updateMicButton();
+    setStatus("מקליט", "לחץ שוב לסיום והוספת הטקסט.");
+  } catch (err) {
+    console.error("[recorder]", err);
+    const isPermission =
+      err instanceof DOMException &&
+      (err.name === "NotAllowedError" || err.name === "SecurityError");
+    setStatus(
+      "שגיאה",
+      isPermission
+        ? "אין הרשאה למיקרופון. אפשר בדפדפן ונסה שוב."
+        : "המיקרופון לא זמין.",
+      true,
+    );
+    state.phase = "idle";
+    updateMicButton();
+  }
 }
 
-if (!getSpeechRecognition()) {
+async function stopRecording() {
+  if (!recorder) return;
+  const r = recorder;
+  recorder = null;
+  state.phase = "transcribing";
+  updateMicButton();
+  setStatus("מתמלל…", "ממתין למודל.");
+
+  try {
+    const audio = await r.stop();
+    if (audio.length < 1600) {
+      setStatus("קצר מדי", "ההקלטה קצרה מדי. נסה שוב.", true);
+      state.phase = "idle";
+      updateMicButton();
+      return;
+    }
+    const text = (await whisper.transcribe(audio, "he")).trim();
+    if (text) {
+      const sep = state.finalText && !/\s$/.test(state.finalText) ? " " : "";
+      state.finalText = state.finalText + sep + text + " ";
+      render();
+      setStatus("מוכן");
+    } else {
+      setStatus("לא זוהה דיבור", "נסה שוב, קרוב יותר למיקרופון.", true);
+    }
+  } catch (err) {
+    console.error("[transcribe]", err);
+    setStatus("שגיאת תמלול", err instanceof Error ? err.message : String(err), true);
+  } finally {
+    state.phase = "idle";
+    updateMicButton();
+  }
+}
+
+// Auto-start model load shortly after page loads so the user isn't surprised
+// the first time they click the mic. Browsers cache the model after first download.
+if (!isMobileLikely()) {
+  setTimeout(() => {
+    if (!whisper.hasStartedLoading()) {
+      whisper.load();
+    }
+  }, 800);
+}
+
+function isMobileLikely() {
+  return /Mobi|Android|iPhone/i.test(navigator.userAgent);
+}
+
+if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
   micBtn.disabled = true;
-  micBtn.title = "תמלול דורש Chrome או Edge";
-  setStatus("מוכן", "תמלול דיבור דורש Chrome או Edge.");
+  micBtn.title = "המיקרופון לא זמין בדפדפן זה";
+  setStatus("מוכן", "תמלול דורש דפדפן עם תמיכה במיקרופון.");
 }
 
 syncThemeButtons();

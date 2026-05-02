@@ -517,3 +517,110 @@ body {
     padding: 18px 20px;
   }
 }
+
+/* =============================================================================
+   Mic busy (transcribing)
+   ============================================================================= */
+.mic-btn.busy {
+  color: var(--accent-cool);
+  border-color: var(--accent-cool);
+  background: rgba(42, 93, 140, 0.08);
+  animation: spin 1.1s linear infinite;
+}
+.mic-btn.busy svg {
+  opacity: 0.55;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =============================================================================
+   Model loading overlay
+   ============================================================================= */
+body.overlay-open {
+  overflow: hidden;
+}
+
+.model-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(8, 12, 24, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: overlay-fade 200ms ease-out;
+}
+
+.model-overlay[hidden] {
+  display: none;
+}
+
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.model-card {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 32px 32px 28px;
+  width: min(480px, 100%);
+  box-shadow: var(--paper-shadow);
+  text-align: center;
+  direction: rtl;
+}
+
+.model-title {
+  margin: 0 0 10px;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.model-sub {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.progress-shell {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--bg-deep);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-cool), var(--accent));
+  transition: width 240ms ease;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: var(--fg-soft);
+}
+
+.model-warning {
+  margin: 22px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+}
