@@ -540,6 +540,143 @@ body {
 }
 
 /* =============================================================================
+   Help toggle (top-right of sheet, mirrors theme-toggle)
+   ============================================================================= */
+.help-toggle {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: help;
+  z-index: 4;
+  transition: color 0.18s, background 0.18s;
+}
+
+.help-toggle:hover,
+.help-toggle:focus {
+  color: var(--accent);
+  outline: none;
+}
+
+.help-toggle:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.help-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+
+.help-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 290px;
+  padding: 14px 16px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--rule-strong);
+  box-shadow: var(--paper-shadow);
+  direction: rtl;
+  text-align: start;
+  color: var(--fg-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 10;
+}
+
+.help-toggle:hover .help-tooltip,
+.help-toggle:focus .help-tooltip,
+.help-toggle:focus-within .help-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.help-tooltip-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.help-tooltip-sub {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.help-tooltip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.help-tooltip-table td {
+  padding: 3px 0;
+  border-top: 1px dashed var(--rule);
+}
+
+.help-tooltip-table tr:first-child td {
+  border-top: 0;
+}
+
+.help-tooltip-table td:last-child {
+  text-align: end;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--accent);
+  width: 60px;
+}
+
+/* =============================================================================
+   Transcribing progress (indeterminate)
+   ============================================================================= */
+.transcribe-progress {
+  flex-basis: 100%;
+  height: 3px;
+  background: var(--bg-deep);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+  margin-top: 4px;
+  position: relative;
+}
+
+.transcribe-progress[hidden] {
+  display: none;
+}
+
+.transcribe-bar {
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--accent-cool), var(--accent), transparent);
+  animation: transcribe-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes transcribe-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(285%); }
+}
+
+/* =============================================================================
    Mic busy (transcribing)
    ============================================================================= */
 .mic-btn.busy {

@@ -1,5 +1,6 @@
 import "./style.css";
 import { convert } from "./translator/convert.ts";
+import { applySymbols } from "./symbols.ts";
 import { Whisper, type ProgressData } from "./whisper.ts";
 import { startRecording, type Recorder } from "./recorder.ts";
 import { applyTheme, loadTheme, type Theme } from "./theme.ts";
@@ -84,6 +85,35 @@ const SVG_MOON = `
     <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
   </svg>`;
 
+const SVG_HELP = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.3 9a2.7 2.7 0 1 1 4.2 2.3c-.9.6-1.5 1-1.5 2.2" />
+    <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+  </svg>`;
+
+const KEYWORD_ROWS: Array<[string, string]> = [
+  ["פלוס", "+"],
+  ["מינוס · מקף", "-"],
+  ["סלש · סלאש", "/"],
+  ["כפול · כוכבית", "*"],
+  ["שווה", "="],
+  ["אחוז", "%"],
+  ["שטרודל", "@"],
+  ["סולמית · האשטג", "#"],
+  ["נקודה", "."],
+  ["פסיק", ","],
+  ["נקודה פסיק", ";"],
+  ["נקודותיים", ":"],
+  ["פתח סוגריים", "("],
+  ["סגור סוגריים", ")"],
+  ["ירידת שורה · רד שורה", "↵"],
+];
+
+const HELP_ROWS_HTML = KEYWORD_ROWS
+  .map(([word, sym]) => `<tr><td>${word}</td><td>${sym}</td></tr>`)
+  .join("");
+
 const REG_MARKS = `
   <span class="reg reg-tl"></span>
   <span class="reg reg-tr"></span>
@@ -97,6 +127,15 @@ app.innerHTML = `
       <button data-theme-value="auto" type="button" aria-label="אוטומטי" title="אוטומטי">${SVG_AUTO}</button>
       <button data-theme-value="light" type="button" aria-label="בהיר" title="בהיר">${SVG_SUN}</button>
       <button data-theme-value="dark" type="button" aria-label="כהה" title="כהה">${SVG_MOON}</button>
+    </div>
+
+    <div class="help-toggle" tabindex="0" aria-label="עזרה: מילות מפתח לסמלים">
+      <span class="help-icon">${SVG_HELP}</span>
+      <div class="help-tooltip" role="tooltip">
+        <p class="help-tooltip-title">מילות מפתח בדיבור</p>
+        <p class="help-tooltip-sub">אמור את המילה במהלך תמלול והיא תהפוך לסמל בטקסט.</p>
+        <table class="help-tooltip-table">${HELP_ROWS_HTML}</table>
+      </div>
     </div>
 
     <header class="masthead">
@@ -137,6 +176,9 @@ app.innerHTML = `
       <span class="status-pulse" aria-hidden="true"></span>
       <span class="status-label" data-role="status-label">מוכן</span>
       <p class="hint" data-role="hint"></p>
+      <div class="transcribe-progress" data-role="transcribe-progress" hidden>
+        <div class="transcribe-bar"></div>
+      </div>
     </footer>
   </main>
 
@@ -169,6 +211,8 @@ const themeButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-theme-value]"),
 );
 
+const transcribeProgressEl = app.querySelector<HTMLDivElement>('[data-role="transcribe-progress"]')!;
+
 const overlayEl = document.querySelector<HTMLDivElement>('[data-role="model-overlay"]')!;
 const overlaySub = document.querySelector<HTMLParagraphElement>('[data-role="model-sub"]')!;
 const progressBar = document.querySelector<HTMLDivElement>('[data-role="progress-bar"]')!;
@@ -177,7 +221,32 @@ const progressBytes = document.querySelector<HTMLSpanElement>('[data-role="progr
 
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 let recorder: Recorder | null = null;
+let transcribeTimerHandle: ReturnType<typeof setInterval> | null = null;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
+
+function fmtClock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function startTranscribeProgress(audioSeconds: number) {
+  transcribeProgressEl.hidden = false;
+  const startedAt = performance.now();
+  const audioLabel = `הקלטה ${fmtClock(audioSeconds)}`;
+  const tick = () => {
+    const elapsed = (performance.now() - startedAt) / 1000;
+    setStatus("מתמלל…", `${audioLabel} · חלפו ${fmtClock(elapsed)}`);
+  };
+  tick();
+  transcribeTimerHandle = setInterval(tick, 250);
+}
+
+function stopTranscribeProgress() {
+  if (transcribeTimerHandle) clearInterval(transcribeTimerHandle);
+  transcribeTimerHandle = null;
+  transcribeProgressEl.hidden = true;
+}
 
 function syncThemeButtons() {
   for (const b of themeButtons) {
@@ -362,7 +431,9 @@ async function stopRecording() {
       updateMicButton();
       return;
     }
-    const text = (await whisper.transcribe(audio, "he")).trim();
+    startTranscribeProgress(audio.length / 16000);
+    const raw = await whisper.transcribe(audio, "he");
+    const text = applySymbols(raw).trim();
     if (text) {
       const sep = state.finalText && !/\s$/.test(state.finalText) ? " " : "";
       state.finalText = state.finalText + sep + text + " ";
@@ -375,16 +446,48 @@ async function stopRecording() {
     console.error("[transcribe]", err);
     setStatus("שגיאת תמלול", err instanceof Error ? err.message : String(err), true);
   } finally {
+    stopTranscribeProgress();
     state.phase = "idle";
     updateMicButton();
   }
 }
 
-setTimeout(() => {
-  if (!whisper.hasStartedLoading()) {
-    whisper.load();
+async function purgeStaleModelCache() {
+  const VERSION_KEY = "model-cache-version";
+  const CURRENT = "ivrit-v2-fp16";
+  if (localStorage.getItem(VERSION_KEY) === CURRENT) return;
+  if (!("caches" in window)) {
+    localStorage.setItem(VERSION_KEY, CURRENT);
+    return;
   }
-}, 800);
+  const STALE_PATHS = [
+    "/onnx-community/whisper-large-v3-turbo/",
+    "/Xenova/whisper-base/",
+    "decoder_model_merged_q4f16",
+  ];
+  try {
+    const names = await caches.keys();
+    for (const name of names) {
+      if (!name.includes("transformers")) continue;
+      const cache = await caches.open(name);
+      const keys = await cache.keys();
+      const stale = keys.filter((req) => STALE_PATHS.some((p) => req.url.includes(p)));
+      await Promise.all(stale.map((req) => cache.delete(req)));
+      if (stale.length > 0) console.log(`[cache] purged ${stale.length} stale model files from ${name}`);
+    }
+  } catch (err) {
+    console.warn("[cache] purge skipped", err);
+  } finally {
+    localStorage.setItem(VERSION_KEY, CURRENT);
+  }
+}
+
+(async () => {
+  await purgeStaleModelCache();
+  setTimeout(() => {
+    if (!whisper.hasStartedLoading()) whisper.load();
+  }, 800);
+})();
 
 if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
   micBtn.disabled = true;
