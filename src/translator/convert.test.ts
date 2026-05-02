@@ -167,8 +167,8 @@ describe("convert: passthrough", () => {
     expect(convert("   ")).toBe("   ");
   });
 
-  it("passes ASCII uppercase letters through (rendered as English glyphs)", () => {
-    expect(convert("ABC")).toBe("ABC");
+  it("uppercases and reverses ASCII letters (so AutoCAD's flip displays them in order)", () => {
+    expect(convert("ABC")).toBe("CBA");
     expect(convert("R=5")).toBe("R=5");
   });
 
@@ -222,23 +222,24 @@ describe("convert: mixed sentences", () => {
 // English in input — uppercased so the Hebrew SHX font renders English glyphs
 // (lowercase Latin slots in that font hold Hebrew glyphs).
 // =============================================================================
-describe("convert: English input uppercasing", () => {
-  it("uppercases a lowercase English word", () => {
-    expect(convert("autocad")).toBe("AUTOCAD");
-    expect(convert("hello")).toBe("HELLO");
+describe("convert: English input uppercasing and reversal", () => {
+  it("uppercases and reverses a lowercase English word", () => {
+    expect(convert("autocad")).toBe("DACOTUA");
+    expect(convert("tlv")).toBe("VLT");
+    expect(convert("hello")).toBe("OLLEH");
   });
 
-  it("uppercases mixed-case English", () => {
-    expect(convert("AutoCAD")).toBe("AUTOCAD");
-    expect(convert("Hello")).toBe("HELLO");
+  it("uppercases and reverses mixed-case English", () => {
+    expect(convert("AutoCAD")).toBe("DACOTUA");
+    expect(convert("Hello")).toBe("OLLEH");
   });
 
-  it("uppercases multiple English words preserving spaces", () => {
-    expect(convert("hello world")).toBe("HELLO WORLD");
+  it("reverses each English word independently (mixed-bidi context)", () => {
+    expect(convert("hello world")).toBe("OLLEH DLROW");
   });
 
-  it("uppercases English embedded in Hebrew", () => {
-    expect(convert("שלום autocad")).toBe("akuo AUTOCAD");
+  it("uppercases and reverses English embedded in Hebrew", () => {
+    expect(convert("שלום autocad")).toBe("akuo DACOTUA");
   });
 
   it("uppercases lowercase letter prefix on numeric run", () => {

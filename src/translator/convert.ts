@@ -20,11 +20,15 @@ const QUOTE_NORMALIZE: Readonly<Record<string, string>> = {
 //   - optional trailing terminator ET (% $ € £ ₪) or sign ES (+ -)
 //
 // Neutrals that break the run: brackets, =, ±, ⌀, °, whitespace, Hebrew.
-const NUMERIC_RUN =
-  /[$€£₪+\-]?[A-Za-z]*\d+(?:[+.,:/\-]\d+)*[A-Za-z]*[%$€£₪+\-]?/g;
+const NUMERIC_RUN_SOURCE =
+  /[$€£₪+\-]?[A-Za-z]*\d+(?:[+.,:/\-]\d+)*[A-Za-z]*[%$€£₪+\-]?/.source;
+// Pure Latin word runs (no adjacent digits) get the same pre-reversal
+// treatment — AutoCAD's flip then displays them in typed letter order.
+const LATIN_RUN_SOURCE = /[A-Za-z]+/.source;
+const LTR_RUN = new RegExp(`${NUMERIC_RUN_SOURCE}|${LATIN_RUN_SOURCE}`, "g");
 
-function reverseNumericRuns(input: string): string {
-  return input.replace(NUMERIC_RUN, (m) => [...m].reverse().join(""));
+function reverseLtrRuns(input: string): string {
+  return input.replace(LTR_RUN, (m) => [...m].reverse().join(""));
 }
 
 // In AutoCAD's Hebrew SHX font, lowercase Latin slots hold Hebrew glyphs
@@ -40,7 +44,7 @@ export function convert(input: string): string {
   if (!input) return "";
 
   let pre = uppercaseInputLatin(input);
-  pre = reverseNumericRuns(pre);
+  pre = reverseLtrRuns(pre);
   let out = "";
   for (const raw of pre) {
     const char = QUOTE_NORMALIZE[raw] ?? raw;
