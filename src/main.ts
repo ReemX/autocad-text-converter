@@ -21,7 +21,7 @@ if (isMobile()) {
           שלא זמינים בטלפון או בטאבלט.
         </p>
         <p class="mobile-block-body">
-          פתח את הקישור במחשב שולחני או נייד עם דפדפן Chrome או Edge.
+          פתח את הקישור במחשב שולחני או נייד.
         </p>
         <p class="mobile-block-byline">
           מאת
