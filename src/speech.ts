@@ -16,6 +16,9 @@ type SpeechRecognitionLike = {
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
+  onaudiostart: (() => void) | null;
+  onspeechstart: (() => void) | null;
 };
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
@@ -36,6 +39,7 @@ export type DictationCallbacks = {
   onFinal: (text: string) => void;
   onError: (error: string) => void;
   onEnd: () => void;
+  onAudioStart?: () => void;
 };
 
 export function createDictation(lang: string, cb: DictationCallbacks) {
@@ -61,6 +65,7 @@ export function createDictation(lang: string, cb: DictationCallbacks) {
   };
   recognition.onerror = (event) => cb.onError(event.error);
   recognition.onend = () => cb.onEnd();
+  recognition.onaudiostart = () => cb.onAudioStart?.();
 
   return recognition;
 }

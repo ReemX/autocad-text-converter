@@ -178,29 +178,93 @@ micBtn.addEventListener("click", () => {
   else startDictation();
 });
 
-function startDictation() {
-  recognition = createDictation("he-IL", {
+const ERROR_HE: Record<string, string> = {
+  "not-allowed": "אין הרשאה למיקרופון. אפשר במערכת/דפדפן.",
+  "service-not-allowed": "שירות התמלול חסום בדפדפן.",
+  "audio-capture": "אין מיקרופון זמין או שהוא בשימוש באפליקציה אחרת.",
+  "no-speech": "לא זוהה דיבור.",
+  network: "תקלת רשת זמנית בשירות התמלול. בדוק חיבור ונסה שוב.",
+  "language-not-supported": "השפה אינה נתמכת.",
+  aborted: "התמלול הופסק.",
+};
+
+let lastErrored = false;
+let networkRetries = 0;
+let shouldRecreate = false;
+const MAX_NETWORK_RETRIES = 8;
+
+function buildRecognition() {
+  return createDictation("he-IL", {
+    onAudioStart: () => {
+      micBtn.classList.add("ready");
+      setStatus("מקשיב");
+    },
     onFinal: (text) => {
       const sep = state.finalText && !state.finalText.endsWith(" ") ? " " : "";
       state.finalText = state.finalText + sep + text.trim() + " ";
       state.interimText = "";
+      networkRetries = 0;
       render();
     },
     onInterim: (text) => {
       state.interimText = text;
+      networkRetries = 0;
       render();
     },
     onError: (error) => {
-      setStatus("שגיאה", `מיקרופון: ${error}`, true);
-      stopDictation();
-    },
-    onEnd: () => {
+      console.error("[speech]", error);
+      if (error === "network" && networkRetries < MAX_NETWORK_RETRIES && state.listening) {
+        networkRetries++;
+        shouldRecreate = true;
+        micBtn.classList.remove("ready");
+        setStatus("מתכונן…", "המתן עד שהמיקרופון יתחיל להאזין.");
+        return;
+      }
+      if (error === "no-speech" && state.listening) {
+        return;
+      }
+      lastErrored = true;
+      const message = ERROR_HE[error] ?? `שגיאת מיקרופון: ${error}`;
       state.listening = false;
       micBtn.setAttribute("aria-pressed", "false");
       micBtn.classList.remove("listening");
-      setStatus("מוכן");
+      setStatus("שגיאה", message, true);
+    },
+    onEnd: () => {
+      if (state.listening && !lastErrored) {
+        if (shouldRecreate) {
+          shouldRecreate = false;
+          recognition = buildRecognition();
+          if (recognition) {
+            try {
+              recognition.start();
+              return;
+            } catch {
+              // fall through
+            }
+          }
+        } else {
+          try {
+            recognition?.start();
+            return;
+          } catch {
+            // fall through
+          }
+        }
+      }
+      state.listening = false;
+      micBtn.setAttribute("aria-pressed", "false");
+      micBtn.classList.remove("listening");
+      if (!lastErrored) setStatus("מוכן");
     },
   });
+}
+
+function startDictation() {
+  lastErrored = false;
+  networkRetries = 0;
+  shouldRecreate = false;
+  recognition = buildRecognition();
   if (!recognition) {
     setStatus("לא זמין", "תמלול דיבור אינו זמין בדפדפן זה.", true);
     return;
@@ -209,7 +273,8 @@ function startDictation() {
   state.listening = true;
   micBtn.setAttribute("aria-pressed", "true");
   micBtn.classList.add("listening");
-  setStatus("מקשיב");
+  micBtn.classList.remove("ready");
+  setStatus("מתכונן…", "המתן עד שהמיקרופון יתחיל להאזין.");
 }
 
 function stopDictation() {
@@ -220,6 +285,7 @@ function stopDictation() {
   state.interimText = "";
   micBtn.setAttribute("aria-pressed", "false");
   micBtn.classList.remove("listening");
+  micBtn.classList.remove("ready");
   setStatus("מוכן");
   render();
 }

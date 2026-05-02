@@ -336,10 +336,22 @@ body {
 }
 
 .mic-btn.listening {
+  color: #b8860b;
+  border-color: #b8860b;
+  background: rgba(184, 134, 11, 0.08);
+  animation: pulse-prep 1.6s ease-in-out infinite;
+}
+
+.mic-btn.listening.ready {
   color: var(--listening);
   border-color: var(--listening);
   background: rgba(196, 52, 29, 0.08);
   animation: pulse-ring 1.4s ease-out infinite;
+}
+
+@keyframes pulse-prep {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
 @keyframes pulse-ring {

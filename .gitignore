@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local AutoCAD paste-verify scratch
+test-paste-temp.txt
