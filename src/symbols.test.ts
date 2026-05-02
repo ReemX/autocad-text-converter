@@ -105,6 +105,14 @@ describe("applySymbols", () => {
     expect(applySymbols("הימיני , - תקני")).toBe("הימיני - תקני");
   });
 
+  it("strips both-sides commas tight against operator (no inner space)", () => {
+    expect(applySymbols("האתר, +, משאית")).toBe("האתר + משאית");
+    expect(applySymbols("חופשי, -, תקני")).toBe("חופשי - תקני");
+    expect(applySymbols("מקדים, +, עגלת חץ, +, פיזור")).toBe(
+      "מקדים + עגלת חץ + פיזור",
+    );
+  });
+
   it("does not strip comma when symbol is part of compound word", () => {
     expect(applySymbols("אבן-שפה, צד אחד")).toBe("אבן-שפה, צד אחד");
   });

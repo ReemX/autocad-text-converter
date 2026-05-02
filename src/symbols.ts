@@ -45,8 +45,11 @@ export function applySymbols(input: string): string {
   out = out.replace(/[‎‏‪-‮⁦-⁩]/g, "");
   // strip pause-comma adjacent to operator symbol (BEFORE tightening,
   // since tightening would glue the comma to the symbol)
-  // matches " , +" → " +" and "+ , " → "+ ".
+  // case A: comma on BOTH sides of symbol: ", + ," → " + "
+  out = out.replace(/[ \t]*,[ \t]*([+\-/*=%@#])[ \t]*,[ \t]*/g, " $1 ");
+  // case B: leading comma only: " , +" → " +"
   out = out.replace(/[ \t]*,[ \t]+(?=[+\-/*=%@#][ \t])/g, " ");
+  // case C: trailing comma only: "+ , " → "+ "
   out = out.replace(/(?<=[ \t][+\-/*=%@#])[ \t]+,[ \t]*/g, " ");
   // tighten punctuation: ". " stays, " ." → "."
   out = out.replace(/[ \t]+([.,;:)])/g, "$1");
