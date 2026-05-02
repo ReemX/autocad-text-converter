@@ -27,10 +27,20 @@ function reverseNumericRuns(input: string): string {
   return input.replace(NUMERIC_RUN, (m) => [...m].reverse().join(""));
 }
 
+// In AutoCAD's Hebrew SHX font, lowercase Latin slots hold Hebrew glyphs
+// while uppercase slots hold real English glyphs. So any English actually
+// typed by the user must be uppercased — otherwise AutoCAD would render it
+// as Hebrew. Hebrew chars typed by the user pass through HE_TO_EN to
+// lowercase Latin (intentionally), which is what makes them render Hebrew.
+function uppercaseInputLatin(input: string): string {
+  return input.replace(/[a-z]/g, (c) => c.toUpperCase());
+}
+
 export function convert(input: string): string {
   if (!input) return "";
 
-  const pre = reverseNumericRuns(input);
+  let pre = uppercaseInputLatin(input);
+  pre = reverseNumericRuns(pre);
   let out = "";
   for (const raw of pre) {
     const char = QUOTE_NORMALIZE[raw] ?? raw;

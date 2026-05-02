@@ -167,7 +167,7 @@ describe("convert: passthrough", () => {
     expect(convert("   ")).toBe("   ");
   });
 
-  it("passes ASCII letters through (not Hebrew)", () => {
+  it("passes ASCII uppercase letters through (rendered as English glyphs)", () => {
     expect(convert("ABC")).toBe("ABC");
     expect(convert("R=5")).toBe("R=5");
   });
@@ -215,6 +215,38 @@ describe("convert: mixed sentences", () => {
 
   it("Hebrew + parens with decimal", () => {
     expect(convert("אורך (12.5) מטר")).toBe("turl )5/21( nyr");
+  });
+});
+
+// =============================================================================
+// English in input — uppercased so the Hebrew SHX font renders English glyphs
+// (lowercase Latin slots in that font hold Hebrew glyphs).
+// =============================================================================
+describe("convert: English input uppercasing", () => {
+  it("uppercases a lowercase English word", () => {
+    expect(convert("autocad")).toBe("AUTOCAD");
+    expect(convert("hello")).toBe("HELLO");
+  });
+
+  it("uppercases mixed-case English", () => {
+    expect(convert("AutoCAD")).toBe("AUTOCAD");
+    expect(convert("Hello")).toBe("HELLO");
+  });
+
+  it("uppercases multiple English words preserving spaces", () => {
+    expect(convert("hello world")).toBe("HELLO WORLD");
+  });
+
+  it("uppercases English embedded in Hebrew", () => {
+    expect(convert("שלום autocad")).toBe("akuo AUTOCAD");
+  });
+
+  it("uppercases lowercase letter prefix on numeric run", () => {
+    expect(convert("v1.2.3")).toBe("3/2/1V");
+  });
+
+  it("leaves Hebrew→Latin output lowercase (so font renders Hebrew)", () => {
+    expect(convert("שלום")).toBe("akuo");
   });
 });
 
