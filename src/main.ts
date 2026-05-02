@@ -4,6 +4,35 @@ import { Whisper, type ProgressData } from "./whisper.ts";
 import { startRecording, type Recorder } from "./recorder.ts";
 import { applyTheme, loadTheme, type Theme } from "./theme.ts";
 
+function isMobile(): boolean {
+  if (/Android|iPhone|iPad|iPod|Mobi|Mobile/i.test(navigator.userAgent)) return true;
+  // iPadOS reports MacIntel UA — detect via touch capability
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
+if (isMobile()) {
+  document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
+    <div class="mobile-block">
+      <div class="mobile-block-card">
+        <h1 class="mobile-block-title">זמין במחשב בלבד</h1>
+        <p class="mobile-block-body">
+          האתר משתמש במודל תמלול גדול שדורש זיכרון ומשאבי חישוב
+          שלא זמינים בטלפון או בטאבלט.
+        </p>
+        <p class="mobile-block-body">
+          פתח את הקישור במחשב שולחני או נייד עם דפדפן Chrome או Edge.
+        </p>
+        <p class="mobile-block-byline">
+          מאת
+          <a href="https://github.com/ReemX" target="_blank" rel="noopener noreferrer">ראם אסף</a>
+        </p>
+      </div>
+    </div>
+  `;
+  throw new Error("mobile not supported");
+}
+
 type Phase = "idle" | "recording" | "transcribing";
 
 type State = {
@@ -351,19 +380,11 @@ async function stopRecording() {
   }
 }
 
-// Auto-start model load shortly after page loads so the user isn't surprised
-// the first time they click the mic. Browsers cache the model after first download.
-if (!isMobileLikely()) {
-  setTimeout(() => {
-    if (!whisper.hasStartedLoading()) {
-      whisper.load();
-    }
-  }, 800);
-}
-
-function isMobileLikely() {
-  return /Mobi|Android|iPhone/i.test(navigator.userAgent);
-}
+setTimeout(() => {
+  if (!whisper.hasStartedLoading()) {
+    whisper.load();
+  }
+}, 800);
 
 if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
   micBtn.disabled = true;
