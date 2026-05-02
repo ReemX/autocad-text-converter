@@ -72,6 +72,10 @@ app.innerHTML = `
 
     <header class="masthead">
       <h1 class="title">ממיר טקסט · אוטוקאד</h1>
+      <p class="byline">
+        מאת
+        <a href="https://github.com/ReemX" target="_blank" rel="noopener noreferrer">ראם אסף</a>
+      </p>
     </header>
 
     <section class="composer">
