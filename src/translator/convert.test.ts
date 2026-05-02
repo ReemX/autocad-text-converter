@@ -234,8 +234,14 @@ describe("convert: English input uppercasing and reversal", () => {
     expect(convert("Hello")).toBe("OLLEH");
   });
 
-  it("reverses each English word independently (mixed-bidi context)", () => {
-    expect(convert("hello world")).toBe("OLLEH DLROW");
+  it("reverses a multi-word English phrase as one block (preserves word order at display)", () => {
+    expect(convert("hello world")).toBe("DLROW OLLEH");
+  });
+
+  it("treats hyphenated and comma-separated English as one LTR block", () => {
+    // Display: "TEL-AVIV, RISHON" — comma renders as comma glyph from the apostrophe slot.
+    expect(convert("tel-aviv, rishon")).toBe("NOHSIR 'VIVA-LET");
+    expect(convert("tel-aviv")).toBe("VIVA-LET");
   });
 
   it("uppercases and reverses English embedded in Hebrew", () => {

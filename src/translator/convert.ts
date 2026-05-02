@@ -8,24 +8,19 @@ const QUOTE_NORMALIZE: Readonly<Record<string, string>> = {
 
 // AutoCAD's Backwards flag reverses the whole source at draw time. Hebrew
 // runs need that reversal — read RTL, glyphs land in correct order. LTR
-// runs (Latin letters, digits, math signs, units) need the reversal undone,
-// so we pre-reverse them; AutoCAD's flip then restores natural typed order.
+// content (Latin letters, digits, ASCII punctuation) needs the reversal
+// undone, so we pre-reverse the whole LTR run; AutoCAD's flip then restores
+// natural typed order.
 //
-// Approximates a Unicode bidi level run for LTR content:
-//   - optional leading currency ET ($ € £ ₪) or sign ES (+ -)
-//   - optional leading ASCII letters L (e.g. "V" in "V1.2.3")
-//   - one or more digits EN
-//   - any number of internal CS/ES (+ - . , : /) flanked by digits
-//   - optional trailing ASCII letters L
-//   - optional trailing terminator ET (% $ € £ ₪) or sign ES (+ -)
+// One contiguous LTR run can include letters, digits, and connectors
+// (space, hyphen, comma, period, apostrophe, double-quote, semicolon,
+// colon, slash, plus, percent, currency). Run starts with a letter/digit
+// (with optional leading sign or currency) and ends with a letter/digit
+// or terminator-class punctuation — never a trailing space.
 //
-// Neutrals that break the run: brackets, =, ±, ⌀, °, whitespace, Hebrew.
-const NUMERIC_RUN_SOURCE =
-  /[$€£₪+\-]?[A-Za-z]*\d+(?:[+.,:/\-]\d+)*[A-Za-z]*[%$€£₪+\-]?/.source;
-// Pure Latin word runs (no adjacent digits) get the same pre-reversal
-// treatment — AutoCAD's flip then displays them in typed letter order.
-const LATIN_RUN_SOURCE = /[A-Za-z]+/.source;
-const LTR_RUN = new RegExp(`${NUMERIC_RUN_SOURCE}|${LATIN_RUN_SOURCE}`, "g");
+// Neutrals that break the run: brackets, =, ±, ⌀, °, Hebrew.
+const LTR_RUN =
+  /[$€£₪+\-]?[A-Za-z\d](?:[A-Za-z\d $€£₪+\-,.'";:/%]*[A-Za-z\d$€£₪+\-,.;:/%])?/g;
 
 function reverseLtrRuns(input: string): string {
   return input.replace(LTR_RUN, (m) => [...m].reverse().join(""));
